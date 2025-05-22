@@ -1,0 +1,101 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2
+    container_name: keycloak
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+    command:
+      - start-dev
+      - --import-realm
+    volumes:
+      - ./myrealm-export.json:/opt/keycloak/data/import/myrealm-export.json:ro
+      - keycloak-data:/opt/keycloak/data
+    ports:
+      - "8080:8080"
+    networks:
+      - task-manager-net
+
+  postgres-db:
+    image: postgres:15
+    container_name: postgres-db
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: taskdb
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - task-manager-net
+
+  taskserver:
+    image: workfred/task-server:latest
+    container_name: taskserver
+    depends_on:
+      postgres-db:
+        condition: service_started
+      keycloak:
+        condition: service_started
+    environment:
+      - KEYCLOAK_URL=http://keycloak:8080/realms
+      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_TASK_CLIENT_ID}
+      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_TASK_CLIENT_SECRET}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_URL=jdbc:postgresql://postgres-db:5432/taskdb
+      - DB_TYPE=postgresql
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM}
+      - KEYCLOAK_SCOPE=${KEYCLOAK_SCOPE}
+    ports:
+      - "8085:8085"
+    networks:
+      - task-manager-net
+  fileserver:
+    image: workfred/file-server:latest
+    container_name: fileserver
+    depends_on:
+      taskserver:
+        condition: service_started
+    environment:
+      - KEYCLOAK_URL=http://keycloak:8080/realms
+      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_FILE_CLIENT_ID}
+      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_FILE_CLIENT_SECRET}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_URL=jdbc:postgresql://postgres-db:5432/taskdb
+      - DB_TYPE=postgresql
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM}
+      - KEYCLOAK_SCOPE=${KEYCLOAK_SCOPE}
+      - TASK_API_URL=http://taskserver:8085/api
+    ports:
+      - "8083:8083"
+    networks:
+      - task-manager-net
+
+  gateway:
+    image: workfred/gateway:latest
+    container_name: gateway
+    depends_on:
+      fileserver:
+        condition: service_started
+    environment:
+      - KEYCLOAK_URL=http://keycloak:8080/realms
+      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_GATEWAY_CLIENT_ID}
+      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_GATEWAY_CLIENT_SECRET}
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM}
+      - KEYCLOAK_SCOPE=${KEYCLOAK_SCOPE}
+      - TASK_API_URL=http://taskserver:8085/api
+      - FILE_API_URL=http://fileserver:8083/api
+    ports:
+      - "8086:8086"
+    networks:
+      - task-manager-net
+
+volumes:
+  keycloak-data:
+  pgdata:
+
+networks:
+  task-manager-net:
+    driver: bridge
