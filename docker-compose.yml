@@ -17,15 +17,31 @@ services:
     networks:
       - task-manager-net
 
-  postgres-db:
+  postgres-task-db:
     image: postgres:15
-    container_name: postgres-db
+    container_name: postgres-task-db
     environment:
-      POSTGRES_USER: ${DB_USERNAME}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${DB_TASK_USERNAME}
+      POSTGRES_PASSWORD: ${DB_TASK_PASSWORD}
       POSTGRES_DB: taskdb
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata-task:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - task-manager-net
+
+  postgres-file-db:
+    image: postgres:15
+    container_name: postgres-file-db
+    environment:
+      POSTGRES_USER: ${DB_FILE_USERNAME}
+      POSTGRES_PASSWORD: ${DB_FILE_PASSWORD}
+      POSTGRES_DB: filedb
+    volumes:
+      - pgdata-file:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
     networks:
       - task-manager-net
 
@@ -33,38 +49,37 @@ services:
     image: workfred/task-server:latest
     container_name: taskserver
     depends_on:
-      postgres-db:
-        condition: service_started
-      keycloak:
-        condition: service_started
+      - postgres-task-db
+      - keycloak
     environment:
       - KEYCLOAK_URL=http://keycloak:8080/realms
       - KEYCLOAK_CLIENT_ID=${KEYCLOAK_TASK_CLIENT_ID}
       - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_TASK_CLIENT_SECRET}
-      - DB_USERNAME=${DB_USERNAME}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_URL=jdbc:postgresql://postgres-db:5432/taskdb
-      - DB_TYPE=postgresql
+      - DB_TASK_USERNAME=${DB_TASK_USERNAME}
+      - DB_TASK_PASSWORD=${DB_TASK_PASSWORD}
+      - DB_TASK_URL=jdbc:postgresql://postgres-task-db:5432/taskdb
+      - DB_TASK_TYPE=postgresql
       - KEYCLOAK_REALM=${KEYCLOAK_REALM}
       - KEYCLOAK_SCOPE=${KEYCLOAK_SCOPE}
     ports:
       - "8085:8085"
     networks:
       - task-manager-net
+
   fileserver:
     image: workfred/file-server:latest
     container_name: fileserver
     depends_on:
-      taskserver:
-        condition: service_started
+      - postgres-file-db
+      - keycloak
     environment:
       - KEYCLOAK_URL=http://keycloak:8080/realms
       - KEYCLOAK_CLIENT_ID=${KEYCLOAK_FILE_CLIENT_ID}
       - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_FILE_CLIENT_SECRET}
-      - DB_USERNAME=${DB_USERNAME}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_URL=jdbc:postgresql://postgres-db:5432/taskdb
-      - DB_TYPE=postgresql
+      - DB_FILE_USERNAME=${DB_FILE_USERNAME}
+      - DB_FILE_PASSWORD=${DB_FILE_PASSWORD}
+      - DB_FILE_URL=jdbc:postgresql://postgres-file-db:5432/filedb
+      - DB_FILE_TYPE=postgresql
       - KEYCLOAK_REALM=${KEYCLOAK_REALM}
       - KEYCLOAK_SCOPE=${KEYCLOAK_SCOPE}
       - TASK_API_URL=http://taskserver:8085/api
@@ -77,8 +92,9 @@ services:
     image: workfred/gateway:latest
     container_name: gateway
     depends_on:
-      fileserver:
-        condition: service_started
+      - fileserver
+      - taskserver
+      - keycloak
     environment:
       - KEYCLOAK_URL=http://keycloak:8080/realms
       - KEYCLOAK_CLIENT_ID=${KEYCLOAK_GATEWAY_CLIENT_ID}
@@ -94,7 +110,8 @@ services:
 
 volumes:
   keycloak-data:
-  pgdata:
+  pgdata-task:
+  pgdata-file:
 
 networks:
   task-manager-net:

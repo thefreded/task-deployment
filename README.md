@@ -7,9 +7,14 @@ Task management system with Keycloak authentication, PostgreSQL database, and mi
 Create a `.env` file with the following variables:
 
 ```env
-# Database
-DB_USERNAME=your_db_user
-DB_PASSWORD=your_db_password
+# Database configurations for task and file service
+DB_TASK_USERNAME=your_task_db_user
+DB_TASK_PASSWORD=your_task_db_password
+DB_TASK_URL=your_task_db_url
+DB_FILE_USERNAME=your_file_db_user
+DB_FILE_PASSWORD=your_file_db_password
+DB_FILE_URL=your_file_db_url
+
 
 # Keycloak Clients
 KEYCLOAK_TASK_CLIENT_ID=task-client
@@ -21,7 +26,7 @@ KEYCLOAK_GATEWAY_CLIENT_SECRET=your_gateway_client_secret
 
 # Keycloak Configuration
 KEYCLOAK_REALM=your_realm
-KEYCLOAK_SCOPE=openid
+KEYCLOAK_SCOPE=your_scope
 ```
 
 ## Quick Start
